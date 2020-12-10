@@ -2,6 +2,15 @@ library(stringr)
 
 BLANK_SPACE <- ""
 
+
+# Errors
+SystemErrors = list(
+  FILE_NOT_FOUND = "The file wasn't found.",
+  INVALID_PARAMETER_VALUE = "The paramater has an invalid value.",
+  EMPTY_FILE = "The file is empty."
+)
+
+
 # Returns tokens that are not in the list of profanity words
 tokens_profanity_filter <- function(tokens){
   
@@ -18,6 +27,7 @@ tokens_profanity_filter <- function(tokens){
   return(tokens[profanityFound])
   
 }
+
 
 # Returns a cleaned sentence
 sentence_filter <- function(sentence){
@@ -36,6 +46,7 @@ sentence_filter <- function(sentence){
   
   return(sentence)
 }
+
 
 # Receives a sentence (character variable) and return a list of tokens
 sentence_tokenization <- function(sentence){
@@ -58,20 +69,41 @@ sentence_tokenization <- function(sentence){
   return(tokens)
 }
 
+
 # Read a file a return a list of tokens
-file_tokenization <- function(strFilePath){
+file_tokenization <- function(strFilePath, samp = 1.0){
+  
+  # Checking parameters values
+  
+  if(!file.exists(strFilePath))
+    stop(SystemErrors$FILE_NOT_FOUND)
+    
+  if(samp <= 0 || samp > 1)
+    stop(SystemErrors$INVALID_PARAMETER_VALUE)
+  
   
   # File Connection 
   fileConn <- file(strFilePath, "r")
   
   # Reading the file
   fileContent <- readLines(fileConn)
+  fileLines <- length(fileContent)
+  
+  # Closing connection
+  close(fileConn)
+  
+  if(fileLines == 0)
+    stop(SystemErrors$EMPTY_FILE)
+  
+  # Getting lines to read according sample number
+  linesToRead <- as.numeric(ceiling(samp * fileLines))
+  sampleLines <- fileContent[sort(sample(1:fileLines, linesToRead))]
   
   # Creating list
   tokenList <- list()
   
-  # Iterating over sentences
-  for(sentence in fileContent){
+  # Iterating over sentences in sample
+  for(sentence in sampleLines){
     tokens <- sentence_tokenization(sentence)
     
     # Adding to a list of tokens
@@ -80,29 +112,13 @@ file_tokenization <- function(strFilePath){
     
   }
   
-  # Closing connection
-  close(fileConn)
-  
   return(tokenList)
 }
 
 
 strFileTemp <- "./dataset/en_US/en_US.blogs.txt"
 
-# File Connection 
-fileConn <- file(strFileTemp, "r")
-
-# Reading the file
-fileContent <- readLines(fileConn)
-
-
-# Closing connection
-close(fileConn)
-
-
-gsub("#", "", "Yo solo #espero que se encuentren #SuperBien")
-
-
+listaTemp <- file_tokenization(strFileTemp, samp = 0.05)
 
 
 
