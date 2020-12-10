@@ -1,77 +1,68 @@
-library(stringr)
+library(tm)
 
 BLANK_SPACE <- ""
+
+SystemConstants = list(
+  PATH_BAD_WORDS = "./dataset/swearWords.txt",
+  ULR_BAD_WORDS = "http://www.bannedwordlist.com/lists/swearWords.txt"
+)
 
 
 # Errors
 SystemErrors = list(
+  EMPTY_FILE = "The file is empty.",
   FILE_NOT_FOUND = "The file wasn't found.",
-  INVALID_PARAMETER_VALUE = "The paramater has an invalid value.",
-  EMPTY_FILE = "The file is empty."
+  INVALID_PARAMETER_VALUE = "The paramater has an invalid value."
+  
 )
 
 
-# Returns tokens that are not in the list of profanity words
-tokens_profanity_filter <- function(tokens){
-  
-  # Profanity list
-  profanityWords <- c('anal', 'asshole', 'ball sucking', 'bastard', 'big breasts', 'bitch',
-                         'bitches', 'blowjob', 'boob', 'boobs', 'bullshit', 'butthole', 'cock', 
-                         'cocks', 'cum', 'dick', 'fuck', 'fucking', 'gay', 'genitals', 'hooker',
-                         'masturbation', 'milf', 'motherfucker', 'nigga', 'nipple', 'nude', 
-                         'orgasm', 'orgy', 'porn', 'pussy', 'semen', 'sex', 'slut', 'sucks',
-                         'suck', 'tits', 'tit', 'vagina')
-  
-  profanityFound <- !(tokens %in% profanityWords)
-  
-  return(tokens[profanityFound])
-  
-}
-
-
-# Returns a cleaned sentence
-sentence_filter <- function(sentence){
-  
-  # To Lower
-  newSentence <- tolower(sentence)
+# Returns a sentence without twitter characters
+remove_twitter_characters <- function(sentence){
   
   # Removing URLs
-  newSentence <- gsub("\\s?(f|ht)(tp)(s?)(://)([^\\.]*)[\\.|/](\\S*)", BLANK_SPACE, newSentence)
+  sentence <- gsub("\\s?(f|ht)(tp)(s?)(://)([^\\.]*)[\\.|/](\\S*)", BLANK_SPACE, sentence)
   
   # Removing hash symbol
-  newSentence <- gsub("#", BLANK_SPACE, newSentence)
-  
-  # Remove everything that isn't a word or number
-  newSentence <- str_replace_all(newSentence, "[^a-zA-Z\\s]", BLANK_SPACE)
+  sentence <- gsub("#", BLANK_SPACE, sentence)
   
   return(sentence)
 }
 
 
-# Receives a sentence (character variable) and return a list of tokens
-sentence_tokenization <- function(sentence){
+# Preprocessing corpus, removing punctuations, twitter characteres, stopwords and bad words
+preprocessing_corpus <- function(corpus, badWordsFilePath = SystemConstants$PATH_BAD_WORDS){
   
-  # Cleaning the sentence
-  newSentence <- sentence_filter(sentence)
+  # Removing punctuations
+  corpus <- tm_map(corpus, removePunctuation)
   
-  # Split it
-  tokens <- str_split(newSentence, " ")
+  # Setting to lowercase
+  corpus <- tm_map(corpus, content_transformer(tolower))
   
-  # Get rid of trailing "" if necessary
-  indexes <- which(tokens == "")
-  if(length(indexes) > 0){
-    tokens <- tokens[-indexes]
-  }
+  # Removing twitter characters
+  corpus <- tm_map(corpus, content_transformer(remove_twitter_characters))
   
-  # Removing profanity words
-  tokens <- tokens_profanity_filter(tokens)
+  # Removing stopwords in english
+  corpus <- tm_map(corpus, removeWords, stopwords(kind = "en"))
   
-  return(tokens)
+  # Dowloading bad words file if doesn't exist
+  if(!file.exists(badWordsFilePath))
+    download.file(SystemConstants$ULR_BAD_WORDS, destfile = badWordsFilePath)
+  
+  # Reading bad words file
+  badWords <- readLines(badWordsFilePath)
+  vsBadWords <- VectorSource(badWords)
+  
+  # Removing bad Words
+  corpus <- tm_map(corpus, removeWords, vsBadWords)
+  
+  return(corpus)
+  
 }
 
 
 # Read a file a return a list of tokens
-file_tokenization <- function(strFilePath, samp = 1.0){
+preprocessing_file <- function(strFilePath, samp = 1.0){
   
   # Checking parameters values
   
@@ -99,28 +90,18 @@ file_tokenization <- function(strFilePath, samp = 1.0){
   linesToRead <- as.numeric(ceiling(samp * fileLines))
   sampleLines <- fileContent[sort(sample(1:fileLines, linesToRead))]
   
-  # Creating list
-  tokenList <- list()
+  sampleCorpus <- VCorpus(VectorSource(sampleLines))
   
-  # Iterating over sentences in sample
-  for(sentence in sampleLines){
-    tokens <- sentence_tokenization(sentence)
-    
-    # Adding to a list of tokens
-    if(length(tokens) > 0)
-      tokenList[[length(tokenList) + 1]] <- tokens
-    
-  }
+  # Preprocessing the corpus
+  sampleCorpus <- preprocessing_corpus(sampleCorpus)
   
-  return(tokenList)
+  return(sampleCorpus)
 }
 
 
 strFileTemp <- "./dataset/en_US/en_US.blogs.txt"
 
-listaTemp <- file_tokenization(strFileTemp, samp = 0.05)
-
-
+corpus <- preprocessing_file(strFileTemp, samp = 0.1)
 
 
 
