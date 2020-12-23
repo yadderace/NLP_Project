@@ -1,4 +1,5 @@
 library(tm)
+library(ngram)
 
 BLANK_SPACE <- ""
 
@@ -16,7 +17,6 @@ SystemErrors = list(
   
 )
 
-
 # Returns a sentence without twitter characters
 remove_twitter_characters <- function(sentence){
   
@@ -29,6 +29,10 @@ remove_twitter_characters <- function(sentence){
   return(sentence)
 }
 
+# Replace the pattern with blank space character
+blank_space_replace <- function(data, pattern){
+  return(gsub(pattern, BLANK_SPACE, data))
+}
 
 # Preprocessing corpus, removing punctuations, twitter characteres, stopwords and bad words
 preprocessing_corpus <- function(corpus, badWordsFilePath = SystemConstants$PATH_BAD_WORDS){
@@ -36,8 +40,14 @@ preprocessing_corpus <- function(corpus, badWordsFilePath = SystemConstants$PATH
   # Removing punctuations
   corpus <- tm_map(corpus, removePunctuation)
   
+  # Removing numbers
+  corpus <- tm_map(corpus, removeNumbers)
+  
   # Setting to lowercase
   corpus <- tm_map(corpus, content_transformer(tolower))
+  
+  # Removing special characters
+  corpus <- tm_map(corpus, content_transformer(blank_space_replace), "–|“|”|-|_")
   
   # Removing twitter characters
   corpus <- tm_map(corpus, content_transformer(remove_twitter_characters))
@@ -60,48 +70,65 @@ preprocessing_corpus <- function(corpus, badWordsFilePath = SystemConstants$PATH
   
 }
 
-
-# Read a file a return a list of tokens
-preprocessing_file <- function(strFilePath, samp = 1.0){
+# Read the file(s) and create corpus according sample percentage parameter
+get_corpus_from_file <- function(strFilePath, samp = 1.0, verbose = F, seed = 1505){
   
   # Checking parameters values
-  
-  if(!file.exists(strFilePath))
-    stop(SystemErrors$FILE_NOT_FOUND)
-    
   if(samp <= 0 || samp > 1)
     stop(SystemErrors$INVALID_PARAMETER_VALUE)
   
+  # Total corpus
+  corpus <- NULL
   
-  # File Connection 
-  fileConn <- file(strFilePath, "r")
+  # Looping trough files
+  for(filePath in strFilePath){
+    
+    if(!file.exists(filePath))
+      stop(SystemErrors$FILE_NOT_FOUND)
+    
+    # File Connection 
+    fileConn <- file(filePath, encoding = "UTF-8")
+    
+    # Reading the file
+    fileContent <- readLines(fileConn)
+    fileLines <- length(fileContent)
+    
+    # Closing connection
+    close(fileConn)
+    
+    if(fileLines == 0)
+      stop(SystemErrors$EMPTY_FILE)
+    
+    # Getting lines to read according sample number
+    linesToRead <- as.numeric(ceiling(samp * fileLines))
+    set.seed(seed)
+    sampleLines <- fileContent[sort(sample(1:fileLines, linesToRead))]
+    sampleCorpus <- VCorpus(VectorSource(sampleLines))
+    
+    if(verbose) print(paste0("File:", basename(filePath) , ", # File Lines:", fileLines, ", # Sample Lines:", linesToRead))
+    
+    # Merging corpus if it's not null
+    if(is.null(corpus)) corpus <- sampleCorpus
+    else corpus <- c(corpus, sampleCorpus)
+    
+  }
   
-  # Reading the file
-  fileContent <- readLines(fileConn)
-  fileLines <- length(fileContent)
-  
-  # Closing connection
-  close(fileConn)
-  
-  if(fileLines == 0)
-    stop(SystemErrors$EMPTY_FILE)
-  
-  # Getting lines to read according sample number
-  linesToRead <- as.numeric(ceiling(samp * fileLines))
-  sampleLines <- fileContent[sort(sample(1:fileLines, linesToRead))]
-  
-  sampleCorpus <- VCorpus(VectorSource(sampleLines))
-  
-  # Preprocessing the corpus
-  sampleCorpus <- preprocessing_corpus(sampleCorpus)
-  
-  return(sampleCorpus)
+  return(corpus)
 }
 
 
-strFileTemp <- "./dataset/en_US/en_US.blogs.txt"
+strFileTemp <- c("./dataset/en_US/en_US.blogs.txt", "./dataset/en_US/en_US.news.txt", "./dataset/en_US/en_US.twitter.txt")
+corpus <- get_corpus_from_file(strFileTemp, samp = 0.1)
+corpus <- preprocessing_corpus(corpus)
 
-corpus <- preprocessing_file(strFileTemp, samp = 0.1)
+
+# Creating Document Matrix
+bigramdocumentmatrix <- TermDocumentMatrix(corpus, control = list(tokenize = bigram_tokenizer))
+
+# Creating 
+bigramFreq <- findFreqTerms(bigramdocumentmatrix, lowfreq = 50)
+
+
 
 
 
