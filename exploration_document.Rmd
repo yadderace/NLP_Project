@@ -1,0 +1,125 @@
+---
+title: "Exploration Document"
+author: "Yadder Aceituno"
+date: "12/22/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Summary
+
+As part of the swift keyboard construction, we need to get the data and prepare it before the model construction. We describe how we removed characters, punctuanction, profanity, etc. Then, we use the result of the previous phase to make a data exploration phase, where we got some insights.
+
+Finally, we describe how we built the n-gram model and how we calculated the accuracy of our constructed model.
+
+Also, this report will include a brief description for further steps, it is, how we will construct the shiny applications for our keyboard.
+
+
+## Getting Data
+
+We can get the data from the next link [Capstone Dataset](https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-SwiftKey.zip). That link will download a zip file. We can download the zip file using the next code:
+
+```{r getting_data, eval = FALSE}
+urlFile <- "https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-SwiftKey.zip"
+destFile <- "./dataset/Coursera-SwiftKey.zip"
+download.file(urlFile, destFile)
+```
+We can unzip the donwloaded file using the next code:
+
+```{r getting_data2, eval=FALSE}
+zipFile <- "./dataset/Coursera-SwiftKey.zip"
+destFile <- "./dataset/Coursera-Swiftkey"
+unzip(zipFile, exdir = destFile)
+```
+
+## Libraries
+
+We will use the next libraries for this report:
+
+```{r libraries, warning = FALSE}
+library(tm)
+library(ngram)
+```
+
+## Exploring Files
+
+We can see the content of the unziped directory with the next code:
+
+```{r exploring_files}
+destFile <- "./dataset/Coursera-Swiftkey/final"
+list.files(destFile)
+```
+
+We can see that there are four directories. We will use the english dataset to construct the model. So, we will explore the english directory.
+
+```{r exploring_files2}
+destFile <- "./dataset/Coursera-Swiftkey/final/en_US"
+list.files(destFile)
+```
+
+Now, we will create a function to read each file from the directory and we will print the number of lines of each one. The function will return a corpus object which will be used to preprocess the data.
+
+```{r exploring_files3, cache = TRUE, warning = FALSE}
+library(tm)
+
+# Read the file(s) and create corpus according sample percentage parameter
+get_corpus_from_file <- function(strFilePath, samp = 1.0, verbose = F, seed = 1505){
+  
+  # Checking parameters values
+  if(samp <= 0 || samp > 1)
+    stop(SystemErrors$INVALID_PARAMETER_VALUE)
+  
+  # Total corpus
+  corpus <- NULL
+  
+  # Looping trough files
+  for(filePath in strFilePath){
+    
+    if(!file.exists(filePath))
+      stop(SystemErrors$FILE_NOT_FOUND)
+    
+    # File Connection 
+    fileConn <- file(filePath, encoding = "UTF-8")
+    
+    # Reading the file
+    fileContent <- readLines(fileConn)
+    fileLines <- length(fileContent)
+    
+    # Closing connection
+    close(fileConn)
+    
+    if(fileLines == 0)
+      stop(SystemErrors$EMPTY_FILE)
+    
+    # Getting lines to read according sample number
+    linesToRead <- as.numeric(ceiling(samp * fileLines))
+    set.seed(seed)
+    sampleLines <- fileContent[sort(sample(1:fileLines, linesToRead))]
+    sampleCorpus <- VCorpus(VectorSource(sampleLines))
+    
+    if(verbose) print(paste0("File:", basename(filePath) , 
+                             ", # File Lines:", fileLines, 
+                             ", # Sample Lines:", linesToRead))
+    
+    # Merging corpus if it's not null
+    if(is.null(corpus)) corpus <- sampleCorpus
+    else corpus <- c(corpus, sampleCorpus)
+    
+  }
+  
+  return(corpus)
+}
+
+# Getting the files from directory
+files <- file.path(destFile, list.files(destFile))
+
+# Getting the sample corpus
+sampleCorpus <- get_corpus_from_file(files, samp = 0.1, verbose = T)
+
+```
+
+
+We can see that the number of lines for each file are approximately 899K, 77K, 2360K, if we combine 100% of the files, the total number of lines is 3336K. Getting only 10% of the lines we have approximately 90K, 8K and 236K for each file, the total number of line is about 334K.
